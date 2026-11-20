@@ -1,0 +1,1050 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gold &amp; Silver Price Live Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --page:            #f9f9f7;
+    --surface-1:       #fcfcfb;
+    --text-primary:    #0b0b0b;
+    --text-secondary:  #52514e;
+    --text-muted:      #898781;
+    --gridline:        #e1e0d9;
+    --baseline:        #c3c2b7;
+    --border:          rgba(11,11,11,0.10);
+    --series-gold:     #2a78d6;
+    --series-silver:   #eb6834;
+    --good:            #006300;
+    --critical:        #d03b3b;
+    --warning:         #fab219;
+    --warning-ink:     #0b0b0b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:            #0d0d0d;
+      --surface-1:       #1a1a19;
+      --text-primary:    #f0efec;
+      --text-secondary:  #c3c2b7;
+      --text-muted:      #898781;
+      --gridline:        #2c2c2a;
+      --baseline:        #383835;
+      --border:          rgba(255,255,255,0.10);
+      --series-gold:     #3987e5;
+      --series-silver:   #d95926;
+      --good:            #0ca30c;
+      --critical:        #e66767;
+      --warning:         #fab219;
+      --warning-ink:     #0b0b0b;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 20px 16px 48px;
+  }
+
+  header { margin-bottom: 20px; }
+  header h1 { font-size: 21px; margin: 0 0 4px; }
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+  }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--good);
+    box-shadow: 0 0 0 0 rgba(12,163,12,0.5);
+    animation: pulse 2s infinite;
+    flex-shrink: 0;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(12,163,12,0.35); }
+    70%  { box-shadow: 0 0 0 6px rgba(12,163,12,0); }
+    100% { box-shadow: 0 0 0 0 rgba(12,163,12,0); }
+  }
+  .warn-note {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--warning-ink);
+    background: var(--warning);
+    border-radius: 6px;
+    padding: 2px 8px;
+  }
+  .warn-note.show { display: inline-flex; }
+
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .tile {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .tile-label {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .tile-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .tile-tag {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  .tile-value { font-size: 24px; font-weight: 600; line-height: 1.1; }
+  .tile-delta { font-size: 12px; margin-top: 4px; }
+  .tile-delta.up { color: var(--good); }
+  .tile-delta.down { color: var(--critical); }
+  .tile-delta.flat { color: var(--text-muted); }
+  .tile-sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .filter-row span { font-size: 12px; color: var(--text-secondary); }
+  .segmented {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    overflow: hidden;
+  }
+  .segmented button {
+    border: none;
+    background: var(--surface-1);
+    color: var(--text-secondary);
+    font-size: 13px;
+    padding: 6px 14px;
+    cursor: pointer;
+  }
+  .segmented button.active {
+    background: var(--series-gold);
+    color: #ffffff;
+  }
+
+  .info-dot {
+    cursor: help;
+    color: var(--text-muted);
+    font-size: 11px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    width: 14px; height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .control-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 14px;
+    font-size: 12px;
+    flex-wrap: wrap;
+  }
+  .control-row label { color: var(--text-secondary); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+  .control-row .push-right { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+  .premium-input {
+    width: 72px;
+    padding: 4px 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--page);
+    color: var(--text-primary);
+    font-size: 12px;
+    text-align: center;
+  }
+  .premium-btn {
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface-1);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .premium-btn:hover { background: var(--gridline); }
+
+  .stale-warning {
+    font-size: 11px;
+    color: var(--critical);
+    margin: 0 0 14px;
+    display: none;
+  }
+  .stale-warning.show { display: block; }
+
+  .panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .panel {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px 10px;
+  }
+  .panel-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 2px;
+  }
+  .panel-header h3 {
+    font-size: 14px;
+    margin: 0;
+    font-weight: 600;
+    flex: 1;
+  }
+  .panel-header .panel-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .panel canvas { max-height: 220px; }
+  .panel-caption {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: 6px 0 0;
+  }
+
+  .bar-panel { margin-bottom: 20px; }
+  .bar-panel canvas { max-height: 240px; }
+
+  details.table-view {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+  }
+  details.table-view summary {
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .table-toolbar { margin-top: 10px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  th, td {
+    text-align: right;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--gridline);
+    white-space: nowrap;
+  }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--text-muted); font-weight: 600; }
+
+  footer {
+    margin-top: 20px;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+  footer a { color: var(--text-muted); }
+
+  @media (max-width: 480px) {
+    .control-row { flex-direction: column; align-items: stretch; }
+    .control-row label, .control-row .segmented, .control-row button { width: 100%; justify-content: space-between; }
+    .control-row .push-right { margin-left: 0; }
+    .filter-row { flex-direction: column; align-items: stretch; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Gold &amp; Silver Price Live Tracker</h1>
+    <div class="status-row">
+      <span class="live-dot" aria-hidden="true"></span>
+      <span id="statusText">Connecting&hellip;</span>
+      <span class="warn-note" id="warnNote">&#9888; Update failed &mdash; retrying</span>
+      <span class="warn-note" id="cachedNote">&#128230; Offline &mdash; showing cached data</span>
+    </div>
+  </header>
+
+  <div class="tiles">
+    <div class="tile">
+      <div class="tile-label"><span class="tile-dot" style="background:var(--series-gold)"></span>Gold (USD / troy oz)</div>
+      <div class="tile-value" id="tileGoldUsd">&ndash;</div>
+      <div class="tile-delta" id="deltaGoldUsd"></div>
+      <div class="tile-sub" id="subGoldUsd"></div>
+    </div>
+    <div class="tile">
+      <div class="tile-label"><span class="tile-dot" style="background:var(--series-gold)"></span>Gold (NPR / tola)<span class="tile-tag" id="goldPurityTag">24K</span></div>
+      <div class="tile-value" id="tileGoldNpr">&ndash;</div>
+      <div class="tile-delta" id="deltaGoldNpr"></div>
+      <div class="tile-sub" id="subGoldNpr"></div>
+    </div>
+    <div class="tile">
+      <div class="tile-label"><span class="tile-dot" style="background:var(--series-silver)"></span>Silver (USD / troy oz)</div>
+      <div class="tile-value" id="tileSilverUsd">&ndash;</div>
+      <div class="tile-delta" id="deltaSilverUsd"></div>
+      <div class="tile-sub" id="subSilverUsd"></div>
+    </div>
+    <div class="tile">
+      <div class="tile-label"><span class="tile-dot" style="background:var(--series-silver)"></span>Silver (NPR / tola)</div>
+      <div class="tile-value" id="tileSilverNpr">&ndash;</div>
+      <div class="tile-delta" id="deltaSilverNpr"></div>
+      <div class="tile-sub" id="subSilverNpr"></div>
+    </div>
+  </div>
+
+  <div class="filter-row">
+    <span>Chart currency</span>
+    <div class="segmented" id="currencyToggle">
+      <button type="button" data-ccy="USD" class="active">USD</button>
+      <button type="button" data-ccy="NPR">NPR</button>
+    </div>
+    <span style="margin-left:12px;">Gold purity <span class="info-dot" title="Nepal quotes gold at two common purities: 24K fine (tejabi) and 22K hallmark. Hallmark is approximated here as 22/24 (&asymp;91.7%) of the fine-gold price.">&#9432;</span></span>
+    <div class="segmented" id="purityToggle">
+      <button type="button" data-purity="fine" class="active">24K Fine</button>
+      <button type="button" data-purity="hallmark">22K Hallmark</button>
+    </div>
+  </div>
+
+  <div class="control-row" id="premiumControl">
+    <span>Adjust premiums <span class="info-dot" title="Multiplier applied to the raw spot&times;FX NPR/tola price to approximate the real Nepal market rate, which bakes in import duty, VAT, and dealer margin that spot&times;FX alone doesn't capture.">&#9432;</span>:</span>
+    <label>Gold: &times;<input type="number" id="goldPremiumInput" step="0.001" min="1" class="premium-input"></label>
+    <label>Silver: &times;<input type="number" id="silverPremiumInput" step="0.001" min="1" class="premium-input"></label>
+    <button id="updatePremiumBtn" class="premium-btn">Update</button>
+    <span class="push-right" id="calibrationRefNote"></span>
+  </div>
+
+  <p class="panel-caption" id="conversionNote"></p>
+  <p class="stale-warning" id="staleWarning"></p>
+
+  <div class="control-row" id="alertsControl">
+    <span>Price alerts <span class="info-dot" title="Get a desktop notification and a beep when a price reaches or exceeds your threshold, in NPR per tola. Requires clicking &quot;Enable notifications&quot; once to grant permission.">&#9432;</span>:</span>
+    <label><input type="checkbox" id="alertsEnabled"> Enable</label>
+    <label>Gold &ge; Rs <input type="number" id="goldThresholdInput" step="100" min="0" class="premium-input" placeholder="e.g. 250000"></label>
+    <label>Silver &ge; Rs <input type="number" id="silverThresholdInput" step="10" min="0" class="premium-input" placeholder="e.g. 3200"></label>
+    <button id="saveAlertsBtn" class="premium-btn">Save</button>
+    <button id="enableNotifBtn" class="premium-btn">Enable notifications</button>
+  </div>
+
+  <div class="panels">
+    <div class="panel">
+      <div class="panel-header">
+        <h3>Gold price trend</h3>
+        <span class="panel-value" id="panelGoldValue">&ndash;</span>
+      </div>
+      <canvas id="chartGoldLine"></canvas>
+      <p class="panel-caption">USD per troy oz (31.1035g) &middot; NPR per tola (11.6638g) &middot; last 30 updates, every 30s</p>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <h3>Silver price trend</h3>
+        <span class="panel-value" id="panelSilverValue">&ndash;</span>
+      </div>
+      <canvas id="chartSilverLine"></canvas>
+      <p class="panel-caption">USD per troy oz (31.1035g) &middot; NPR per tola (11.6638g) &middot; last 30 updates, every 30s</p>
+    </div>
+  </div>
+
+  <div class="panel bar-panel">
+    <div class="panel-header">
+      <h3>Change since page load</h3>
+    </div>
+    <canvas id="chartChangeBar"></canvas>
+    <p class="panel-caption">Percent change in the selected currency, measured from the first reading this session.</p>
+  </div>
+
+  <details class="table-view">
+    <summary>View data as a table</summary>
+    <div class="table-toolbar">
+      <button id="exportCsvBtn" class="premium-btn">Export CSV</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Gold (USD/oz)</th>
+          <th>Gold (NPR/tola)</th>
+          <th>Silver (USD/oz)</th>
+          <th>Silver (NPR/tola)</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </details>
+
+  <footer>
+    Prices refresh automatically every 30 seconds (with automatic retry/backoff on failure, and the
+    last successfully fetched prices are cached locally so the page can still show a value if the
+    feed is briefly unreachable). Spot price per troy ounce from
+    <a href="https://gold-api.com" target="_blank" rel="noopener">gold-api.com</a>; USD&rarr;NPR rate from
+    <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">exchangerate-api.com</a> (updated daily).
+    NPR prices are converted to the customary Nepali unit, the tola (11.6638038g), from the USD troy-ounce
+    (31.1034768g) spot price: 1 troy oz = 31.1034768 &divide; 11.6638038 = 2.66667 tola. A local-market premium
+    (gold &times;1.2357, calibrated 2026-11-20 against a live spot price of $3,544.87/oz and the quoted Nepal
+    rate of Rs&nbsp;245,400/tola; silver &times;1.3207, calibrated the same day against $42.033/oz and
+    Rs&nbsp;3,110/tola) is then applied, since raw spot&times;FX alone undershoots the actual FENEGOSIDA rate
+    &mdash; it omits import duty, VAT, and dealer margin. Both premiums are editable above and saved to this
+    browser's local storage. Gold additionally supports a 22K hallmark vs. 24K fine purity toggle (22/24
+    ratio, &asymp;91.7%) &mdash; Nepal's silver market is not commonly quoted by karat, so no purity toggle is
+    offered for it. A secondary free, keyless price API was evaluated as a fallback data source (goldprice.org,
+    metals.live) but neither responded reliably, so resilience here is retry/backoff plus the local cache above,
+    not a second live source.
+    Indicative only &mdash; not an executable trading price.
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  const REFRESH_MS = 30000;
+  const MAX_POINTS = 30;
+  // Each list is tried in order, with retries/backoff per URL, before giving up —
+  // a structural hook for a second data source. No reliable free, keyless alternative
+  // (goldprice.org, metals.live) was found at the time of writing, so each only holds one URL.
+  const GOLD_URLS = ['https://api.gold-api.com/price/XAU'];
+  const SILVER_URLS = ['https://api.gold-api.com/price/XAG'];
+  const FX_URLS = ['https://open.er-api.com/v6/latest/USD'];
+
+  // 1 troy oz = 31.1034768 g; 1 tola = 11.6638038 g (180 grains).
+  // oz -> tola: divide grams by grams-per-tola, i.e. multiply by this factor.
+  const GRAMS_PER_TROY_OZ = 31.1034768;
+  const GRAMS_PER_TOLA = 11.6638038;
+  const TOLA_PER_OZ = GRAMS_PER_TROY_OZ / GRAMS_PER_TOLA; // ≈ 2.66667
+
+  // 22K hallmark gold is conventionally priced at 22/24 of the 24K fine-gold rate.
+  const PURITY = { fine: 1, hallmark: 22 / 24 };
+
+  // International spot (USD/oz) × FX rate, converted to tola, consistently undershoots the
+  // actual Nepal counter price (FENEGOSIDA daily rate) because that price bakes in import
+  // duty, VAT, and dealer margin. Each entry records the spot price and date used to derive
+  // its premium, so staleness can be detected later (see calibrationWarning()).
+  const CALIBRATION = {
+    gold:   { premium: 1.2357, spotUsd: 3544.87, nprRate: 149.394326, date: '2026-11-20', referenceNpr: 245400 },
+    silver: { premium: 1.3207, spotUsd: 42.033,  nprRate: 149.394326, date: '2026-11-20', referenceNpr: 3110 },
+  };
+  const LOCAL_PREMIUM = { gold: CALIBRATION.gold.premium, silver: CALIBRATION.silver.premium };
+
+  // ---- Local persistence (session-independent, this browser only) ----
+  function loadJSON(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) { return fallback; }
+  }
+  function saveJSON(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+  }
+
+  const state = {
+    currency: 'USD',
+    purity: 'fine',
+    nprRate: null,
+    gold: { usd: null, prevUsd: null, baselineUsd: null, history: [] },
+    silver: { usd: null, prevUsd: null, baselineUsd: null, history: [] },
+    lastUpdate: null,
+    isCached: false,
+    cachedAt: null,
+    alerts: { enabled: false, goldThreshold: null, silverThreshold: null, goldTriggered: false, silverTriggered: false },
+  };
+
+  // Restore persisted premiums / purity / alert settings over the defaults above.
+  (function restorePersisted() {
+    const storedPremiums = loadJSON('xauxag.premiums', null);
+    if (storedPremiums) {
+      if (Number.isFinite(storedPremiums.gold) && storedPremiums.gold > 0) LOCAL_PREMIUM.gold = storedPremiums.gold;
+      if (Number.isFinite(storedPremiums.silver) && storedPremiums.silver > 0) LOCAL_PREMIUM.silver = storedPremiums.silver;
+    }
+    const storedPurity = loadJSON('xauxag.purity', null);
+    if (storedPurity === 'fine' || storedPurity === 'hallmark') state.purity = storedPurity;
+    const storedAlerts = loadJSON('xauxag.alerts', null);
+    if (storedAlerts) {
+      state.alerts.enabled = !!storedAlerts.enabled;
+      state.alerts.goldThreshold = Number.isFinite(storedAlerts.goldThreshold) ? storedAlerts.goldThreshold : null;
+      state.alerts.silverThreshold = Number.isFinite(storedAlerts.silverThreshold) ? storedAlerts.silverThreshold : null;
+    }
+  })();
+
+  const fmt = (value, ccy) => {
+    if (value == null || Number.isNaN(value)) return '–';
+    if (ccy === 'NPR') {
+      return 'Rs ' + value.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    }
+    return '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const pctChange = (from, to) => (from == null || to == null || from === 0) ? null : ((to - from) / from) * 100;
+
+  function setDelta(el, from, to) {
+    const pct = pctChange(from, to);
+    if (pct == null) { el.textContent = ''; el.className = 'tile-delta'; return; }
+    const sign = pct > 0 ? '+' : '';
+    el.textContent = sign + pct.toFixed(2) + '% vs last update';
+    el.className = 'tile-delta ' + (pct > 0.001 ? 'up' : pct < -0.001 ? 'down' : 'flat');
+  }
+
+  async function fetchJson(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(url + ' -> ' + res.status);
+    return res.json();
+  }
+
+  function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+  // Retries each URL with exponential backoff before falling through to the next one in the list.
+  async function fetchWithFallback(urls, attemptsPerUrl, delayMs) {
+    attemptsPerUrl = attemptsPerUrl || 3;
+    delayMs = delayMs || 800;
+    let lastErr;
+    for (const url of urls) {
+      for (let attempt = 0; attempt < attemptsPerUrl; attempt++) {
+        try {
+          return await fetchJson(url);
+        } catch (err) {
+          lastErr = err;
+          if (attempt < attemptsPerUrl - 1) await sleep(delayMs * Math.pow(2, attempt));
+        }
+      }
+    }
+    throw lastErr;
+  }
+
+  function loadCachedPrices() {
+    const cached = loadJSON('xauxag.lastKnown', null);
+    if (!cached || cached.goldUsd == null || cached.silverUsd == null) return false;
+    state.gold.usd = cached.goldUsd;
+    state.silver.usd = cached.silverUsd;
+    state.nprRate = cached.nprRate;
+    if (state.gold.baselineUsd == null) state.gold.baselineUsd = cached.goldUsd;
+    if (state.silver.baselineUsd == null) state.silver.baselineUsd = cached.silverUsd;
+    state.isCached = true;
+    state.cachedAt = new Date(cached.t);
+    return true;
+  }
+
+  // ---- Audio / desktop notification for price alerts ----
+  let audioCtx = null;
+  function ensureAudioCtx() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* unsupported */ }
+    }
+    return audioCtx;
+  }
+  function beep() {
+    const ctx = ensureAudioCtx();
+    if (!ctx) return;
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = 880;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
+      osc.stop(ctx.currentTime + 0.4);
+    } catch (e) { /* ignore */ }
+  }
+  function notify(title, body) {
+    if (window.Notification && Notification.permission === 'granted') {
+      try { new Notification(title, { body }); } catch (e) { /* ignore */ }
+    }
+    beep();
+  }
+
+  // ---- Chart.js setup ----
+  Chart.defaults.font.family = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+
+  function crosshairPlugin() {
+    return {
+      id: 'crosshair',
+      afterDraw(chart) {
+        const active = chart.tooltip && chart.tooltip._active;
+        if (active && active.length) {
+          const x = active[0].element.x;
+          const { top, bottom } = chart.scales.y;
+          const ctx = chart.ctx;
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(x, top);
+          ctx.lineTo(x, bottom);
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = cssVar('--gridline');
+          ctx.stroke();
+          ctx.restore();
+        }
+      },
+    };
+  }
+
+  function barValueLabelsPlugin() {
+    return {
+      id: 'barValueLabels',
+      afterDatasetsDraw(chart) {
+        const ctx = chart.ctx;
+        chart.data.datasets.forEach((dataset, di) => {
+          const meta = chart.getDatasetMeta(di);
+          meta.data.forEach((bar, i) => {
+            const value = dataset.data[i];
+            if (value == null) return;
+            ctx.save();
+            ctx.fillStyle = cssVar('--text-primary');
+            ctx.font = "600 12px system-ui, -apple-system, 'Segoe UI', sans-serif";
+            ctx.textAlign = 'center';
+            const label = (value > 0 ? '+' : '') + value.toFixed(2) + '%';
+            const y = value >= 0 ? bar.y - 8 : bar.y + 16;
+            ctx.fillText(label, bar.x, y);
+            ctx.restore();
+          });
+        });
+      },
+    };
+  }
+
+  const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  function lineChartConfig(color) {
+    return {
+      type: 'line',
+      data: { labels: [], datasets: [{
+        data: [],
+        borderColor: color,
+        backgroundColor: color + '1a',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.25,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: color,
+        pointHoverBorderColor: cssVar('--surface-1'),
+        pointHoverBorderWidth: 2,
+      }]},
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: cssVar('--surface-1'),
+            titleColor: cssVar('--text-secondary'),
+            bodyColor: cssVar('--text-primary'),
+            borderColor: cssVar('--border'),
+            borderWidth: 1,
+            padding: 8,
+            displayColors: false,
+            callbacks: {
+              label: (ctx) => fmt(ctx.parsed.y, state.currency),
+            },
+          },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: cssVar('--text-muted'), maxTicksLimit: 6 } },
+          y: {
+            grid: { color: cssVar('--gridline') },
+            border: { color: cssVar('--baseline') },
+            ticks: {
+              color: cssVar('--text-muted'),
+              callback: (v) => fmt(v, state.currency),
+            },
+          },
+        },
+      },
+      plugins: [crosshairPlugin()],
+    };
+  }
+
+  const goldLineChart = new Chart(document.getElementById('chartGoldLine'), lineChartConfig(cssVar('--series-gold')));
+  const silverLineChart = new Chart(document.getElementById('chartSilverLine'), lineChartConfig(cssVar('--series-silver')));
+
+  const changeBarChart = new Chart(document.getElementById('chartChangeBar'), {
+    type: 'bar',
+    data: {
+      labels: ['Gold', 'Silver'],
+      datasets: [{
+        data: [null, null],
+        backgroundColor: [cssVar('--series-gold'), cssVar('--series-silver')],
+        borderRadius: 4,
+        maxBarThickness: 48,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: cssVar('--surface-1'),
+          titleColor: cssVar('--text-secondary'),
+          bodyColor: cssVar('--text-primary'),
+          borderColor: cssVar('--border'),
+          borderWidth: 1,
+          padding: 8,
+          displayColors: false,
+          callbacks: {
+            label: (ctx) => (ctx.parsed.y > 0 ? '+' : '') + ctx.parsed.y.toFixed(3) + '%',
+          },
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: cssVar('--text-secondary'), font: { weight: '600' } } },
+        y: {
+          grid: { color: cssVar('--gridline') },
+          border: { color: cssVar('--baseline') },
+          ticks: { color: cssVar('--text-muted'), callback: (v) => v + '%' },
+        },
+      },
+    },
+    plugins: [barValueLabelsPlugin()],
+  });
+
+  // ---- Conversion helpers ----
+  // NPR values are priced per tola (not per troy oz): USD/oz * FX rate / TOLA_PER_OZ,
+  // then scaled by LOCAL_PREMIUM to approximate the actual Nepal market (FENEGOSIDA) rate,
+  // and (gold only) by the selected purity ratio.
+  function nprPerTola(metal, usd) {
+    if (usd == null || !state.nprRate) return null;
+    let val = (usd * state.nprRate * LOCAL_PREMIUM[metal]) / TOLA_PER_OZ;
+    if (metal === 'gold') val *= PURITY[state.purity];
+    return val;
+  }
+
+  function currentValue(metal, ccy) {
+    const usd = state[metal].usd;
+    if (usd == null) return null;
+    return ccy === 'NPR' ? nprPerTola(metal, usd) : usd;
+  }
+
+  function perGramSubUsd(usdPerOz) {
+    if (usdPerOz == null) return '';
+    return '≈ ' + fmt(usdPerOz / GRAMS_PER_TROY_OZ, 'USD') + '/g';
+  }
+  function perTenGramSubNpr(tolaPrice) {
+    if (tolaPrice == null) return '';
+    return '≈ ' + fmt((tolaPrice / GRAMS_PER_TOLA) * 10, 'NPR') + '/10g';
+  }
+
+  // Flags when a premium's calibration looks out of date — either by elapsed time,
+  // or because the live spot price has drifted far from the spot price it was derived from.
+  function calibrationWarning(metal) {
+    const cal = CALIBRATION[metal];
+    const nowUsd = state[metal].usd;
+    if (nowUsd == null) return null;
+    const daysSince = (Date.now() - new Date(cal.date + 'T00:00:00Z').getTime()) / 86400000;
+    const deviationPct = Math.abs((nowUsd - cal.spotUsd) / cal.spotUsd) * 100;
+    if (daysSince > 14 || deviationPct > 15) {
+      return metal + ' premium may be stale — calibrated ' + daysSince.toFixed(0) + 'd ago at $' +
+        cal.spotUsd.toFixed(2) + '/oz, spot now $' + nowUsd.toFixed(2) + '/oz (Δ' + deviationPct.toFixed(1) + '%)';
+    }
+    return null;
+  }
+
+  function updateConversionNote() {
+    const goldPremium = LOCAL_PREMIUM.gold;
+    const silverPremium = LOCAL_PREMIUM.silver;
+    document.getElementById('conversionNote').innerHTML = `
+      1 troy oz = 31.1034768&nbsp;g &divide; 11.6638038&nbsp;g/tola = 2.66667 tola &nbsp;&middot;&nbsp;
+      NPR/tola = (USD/oz &times; USD&rarr;NPR rate &times; premium &times; purity) &divide; 2.66667 &nbsp;&middot;&nbsp;
+      Current premiums: gold &times;${goldPremium.toFixed(3)} (${((goldPremium - 1) * 100).toFixed(1)}%),
+      silver &times;${silverPremium.toFixed(3)} (${((silverPremium - 1) * 100).toFixed(1)}%)
+    `;
+    document.getElementById('calibrationRefNote').textContent =
+      'Calibrated ' + CALIBRATION.gold.date + ' vs Rs ' + CALIBRATION.gold.referenceNpr.toLocaleString('en-US') +
+      '/tola gold, Rs ' + CALIBRATION.silver.referenceNpr.toLocaleString('en-US') + '/tola silver';
+  }
+
+  function updateStaleWarning() {
+    const msgs = [calibrationWarning('gold'), calibrationWarning('silver')].filter(Boolean);
+    const el = document.getElementById('staleWarning');
+    if (msgs.length) {
+      el.textContent = '⚠ ' + msgs.join(' · ');
+      el.classList.add('show');
+    } else {
+      el.classList.remove('show');
+    }
+  }
+
+  function checkAlerts() {
+    if (!state.alerts.enabled) return;
+    const goldNow = currentValue('gold', 'NPR');
+    const silverNow = currentValue('silver', 'NPR');
+
+    if (state.alerts.goldThreshold != null && goldNow != null) {
+      const crossed = goldNow >= state.alerts.goldThreshold;
+      if (crossed && !state.alerts.goldTriggered) {
+        notify('Gold price alert', 'Gold reached ' + fmt(goldNow, 'NPR') + '/tola (threshold ' + fmt(state.alerts.goldThreshold, 'NPR') + ')');
+        state.alerts.goldTriggered = true;
+      } else if (!crossed) {
+        state.alerts.goldTriggered = false;
+      }
+    }
+    if (state.alerts.silverThreshold != null && silverNow != null) {
+      const crossed = silverNow >= state.alerts.silverThreshold;
+      if (crossed && !state.alerts.silverTriggered) {
+        notify('Silver price alert', 'Silver reached ' + fmt(silverNow, 'NPR') + '/tola (threshold ' + fmt(state.alerts.silverThreshold, 'NPR') + ')');
+        state.alerts.silverTriggered = true;
+      } else if (!crossed) {
+        state.alerts.silverTriggered = false;
+      }
+    }
+  }
+
+  function render() {
+    const ccy = state.currency;
+
+    document.getElementById('tileGoldUsd').textContent = fmt(state.gold.usd, 'USD');
+    document.getElementById('tileSilverUsd').textContent = fmt(state.silver.usd, 'USD');
+    document.getElementById('tileGoldNpr').textContent = fmt(currentValue('gold', 'NPR'), 'NPR');
+    document.getElementById('tileSilverNpr').textContent = fmt(currentValue('silver', 'NPR'), 'NPR');
+    document.getElementById('goldPurityTag').textContent = state.purity === 'hallmark' ? '22K' : '24K';
+
+    document.getElementById('subGoldUsd').textContent = perGramSubUsd(state.gold.usd);
+    document.getElementById('subSilverUsd').textContent = perGramSubUsd(state.silver.usd);
+    document.getElementById('subGoldNpr').textContent = perTenGramSubNpr(currentValue('gold', 'NPR'));
+    document.getElementById('subSilverNpr').textContent = perTenGramSubNpr(currentValue('silver', 'NPR'));
+
+    setDelta(document.getElementById('deltaGoldUsd'), state.gold.prevUsd, state.gold.usd);
+    setDelta(document.getElementById('deltaSilverUsd'), state.silver.prevUsd, state.silver.usd);
+    setDelta(document.getElementById('deltaGoldNpr'), nprPerTola('gold', state.gold.prevUsd), currentValue('gold', 'NPR'));
+    setDelta(document.getElementById('deltaSilverNpr'), nprPerTola('silver', state.silver.prevUsd), currentValue('silver', 'NPR'));
+
+    document.getElementById('panelGoldValue').textContent = fmt(currentValue('gold', ccy), ccy);
+    document.getElementById('panelSilverValue').textContent = fmt(currentValue('silver', ccy), ccy);
+
+    const labels = state.gold.history.map((p) => p.t.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+    goldLineChart.data.labels = labels;
+    goldLineChart.data.datasets[0].data = state.gold.history.map((p) => ccy === 'NPR' ? nprPerTola('gold', p.usd) : p.usd);
+    goldLineChart.update();
+
+    silverLineChart.data.labels = labels;
+    silverLineChart.data.datasets[0].data = state.silver.history.map((p) => ccy === 'NPR' ? nprPerTola('silver', p.usd) : p.usd);
+    silverLineChart.update();
+
+    const goldBase = ccy === 'NPR' ? nprPerTola('gold', state.gold.baselineUsd) : state.gold.baselineUsd;
+    const silverBase = ccy === 'NPR' ? nprPerTola('silver', state.silver.baselineUsd) : state.silver.baselineUsd;
+    changeBarChart.data.datasets[0].data = [
+      pctChange(goldBase, currentValue('gold', ccy)),
+      pctChange(silverBase, currentValue('silver', ccy)),
+    ];
+    changeBarChart.update();
+
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    for (let i = state.gold.history.length - 1; i >= 0; i--) {
+      const g = state.gold.history[i];
+      const s = state.silver.history[i];
+      if (!g || !s) continue;
+      const tr = document.createElement('tr');
+      const cells = [
+        g.t.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        fmt(g.usd, 'USD'),
+        fmt(nprPerTola('gold', g.usd), 'NPR'),
+        fmt(s.usd, 'USD'),
+        fmt(nprPerTola('silver', s.usd), 'NPR'),
+      ];
+      cells.forEach((text) => {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    }
+
+    updateStaleWarning();
+    checkAlerts();
+  }
+
+  function updateStatusText() {
+    if (!state.lastUpdate) return;
+    const secs = Math.round((Date.now() - state.lastUpdate.getTime()) / 1000);
+    document.getElementById('statusText').textContent =
+      'Live · updated ' + (secs < 5 ? 'just now' : secs + 's ago');
+  }
+
+  async function fetchAll() {
+    try {
+      const [gold, silver, fx] = await Promise.all([
+        fetchWithFallback(GOLD_URLS),
+        fetchWithFallback(SILVER_URLS),
+        fetchWithFallback(FX_URLS),
+      ]);
+
+      state.nprRate = fx.rates && fx.rates.NPR ? fx.rates.NPR : state.nprRate;
+
+      state.gold.prevUsd = state.gold.usd;
+      state.gold.usd = gold.price;
+      if (state.gold.baselineUsd == null) state.gold.baselineUsd = gold.price;
+      state.gold.history.push({ t: new Date(), usd: gold.price });
+      if (state.gold.history.length > MAX_POINTS) state.gold.history.shift();
+
+      state.silver.prevUsd = state.silver.usd;
+      state.silver.usd = silver.price;
+      if (state.silver.baselineUsd == null) state.silver.baselineUsd = silver.price;
+      state.silver.history.push({ t: new Date(), usd: silver.price });
+      if (state.silver.history.length > MAX_POINTS) state.silver.history.shift();
+
+      state.lastUpdate = new Date();
+      state.isCached = false;
+      document.getElementById('warnNote').classList.remove('show');
+      document.getElementById('cachedNote').classList.remove('show');
+
+      saveJSON('xauxag.lastKnown', {
+        goldUsd: state.gold.usd,
+        silverUsd: state.silver.usd,
+        nprRate: state.nprRate,
+        t: state.lastUpdate.getTime(),
+      });
+
+      render();
+      updateStatusText();
+    } catch (err) {
+      console.error('Fetch failed:', err);
+      document.getElementById('warnNote').classList.add('show');
+      if (!state.lastUpdate) {
+        const gotCache = loadCachedPrices();
+        if (gotCache) {
+          document.getElementById('cachedNote').classList.add('show');
+          document.getElementById('statusText').textContent =
+            'Offline — showing cached data from ' + state.cachedAt.toLocaleString();
+          render();
+        } else {
+          document.getElementById('statusText').textContent = 'Unable to reach price feed — retrying…';
+        }
+      }
+    }
+  }
+
+  document.getElementById('currencyToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-ccy]');
+    if (!btn) return;
+    state.currency = btn.dataset.ccy;
+    document.querySelectorAll('#currencyToggle button').forEach((b) => b.classList.toggle('active', b === btn));
+    render();
+  });
+
+  document.getElementById('purityToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-purity]');
+    if (!btn) return;
+    state.purity = btn.dataset.purity;
+    document.querySelectorAll('#purityToggle button').forEach((b) => b.classList.toggle('active', b === btn));
+    saveJSON('xauxag.purity', state.purity);
+    render();
+  });
+
+  // Premium adjustment — persisted to localStorage so it survives a reload.
+  document.getElementById('updatePremiumBtn').addEventListener('click', () => {
+    const g = parseFloat(document.getElementById('goldPremiumInput').value);
+    const s = parseFloat(document.getElementById('silverPremiumInput').value);
+    if (Number.isFinite(g) && g > 0) LOCAL_PREMIUM.gold = g;
+    if (Number.isFinite(s) && s > 0) LOCAL_PREMIUM.silver = s;
+    saveJSON('xauxag.premiums', { gold: LOCAL_PREMIUM.gold, silver: LOCAL_PREMIUM.silver });
+    updateConversionNote();
+    render();
+  });
+
+  // Alert settings — explicit Save, like the premium control, and persisted.
+  document.getElementById('saveAlertsBtn').addEventListener('click', () => {
+    state.alerts.enabled = document.getElementById('alertsEnabled').checked;
+    const g = parseFloat(document.getElementById('goldThresholdInput').value);
+    const s = parseFloat(document.getElementById('silverThresholdInput').value);
+    state.alerts.goldThreshold = Number.isFinite(g) ? g : null;
+    state.alerts.silverThreshold = Number.isFinite(s) ? s : null;
+    state.alerts.goldTriggered = false;
+    state.alerts.silverTriggered = false;
+    saveJSON('xauxag.alerts', {
+      enabled: state.alerts.enabled,
+      goldThreshold: state.alerts.goldThreshold,
+      silverThreshold: state.alerts.silverThreshold,
+    });
+    render();
+  });
+
+  document.getElementById('enableNotifBtn').addEventListener('click', () => {
+    ensureAudioCtx();
+    if (window.Notification && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+      Notification.requestPermission();
+    }
+    beep();
+  });
+
+  // ---- Initialize UI from (possibly persisted) state ----
+  document.getElementById('goldPremiumInput').value = LOCAL_PREMIUM.gold;
+  document.getElementById('silverPremiumInput').value = LOCAL_PREMIUM.silver;
+  document.querySelectorAll('#purityToggle button').forEach((b) => b.classList.toggle('active', b.dataset.purity === state.purity));
+  document.getElementById('alertsEnabled').checked = state.alerts.enabled;
+  if (state.alerts.goldThreshold != null) document.getElementById('goldThresholdInput').value = state.alerts.goldThreshold;
+  if (state.alerts.silverThreshold != null) document.getElementById('silverThresholdInput').value = state.alerts.silverThreshold;
+  updateConversionNote();
+
+  document.getElementById('exportCsvBtn').addEventListener('click', () => {
+    const rows = [['Time', 'Gold (USD/oz)', 'Gold (NPR/tola)', 'Silver (USD/oz)', 'Silver (NPR/tola)']];
+    for (let i = 0; i < state.gold.history.length; i++) {
+      const g = state.gold.history[i];
+      const s = state.silver.history[i];
+      if (!g || !s) continue;
+      const goldNpr = nprPerTola('gold', g.usd);
+      const silverNpr = nprPerTola('silver', s.usd);
+      rows.push([
+        g.t.toISOString(),
+        g.usd != null ? g.usd.toFixed(2) : '',
+        goldNpr != null ? goldNpr.toFixed(0) : '',
+        s.usd != null ? s.usd.toFixed(2) : '',
+        silverNpr != null ? silverNpr.toFixed(0) : '',
+      ]);
+    }
+    const csv = rows.map((r) => r.map((cell) => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'gold-silver-prices-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  fetchAll();
+  setInterval(fetchAll, REFRESH_MS);
+  setInterval(updateStatusText, 1000);
+})();
+</script>
+</body>
+</html>
