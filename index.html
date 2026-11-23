@@ -416,13 +416,16 @@
     <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">exchangerate-api.com</a> (updated daily).
     NPR prices are converted to the customary Nepali unit, the tola (11.6638038g), from the USD troy-ounce
     (31.1034768g) spot price: 1 troy oz = 31.1034768 &divide; 11.6638038 = 2.66667 tola. A local-market premium
-    (gold &times;1.2357, calibrated 2026-11-20 against a live spot price of $3,544.87/oz and the quoted Nepal
-    rate of Rs&nbsp;245,400/tola; silver &times;1.3207, calibrated the same day against $42.033/oz and
-    Rs&nbsp;3,110/tola) is then applied, since raw spot&times;FX alone undershoots the actual FENEGOSIDA rate
-    &mdash; it omits import duty, VAT, and dealer margin. Both premiums are editable above and saved to this
-    browser's local storage. Gold additionally supports a 22K hallmark vs. 24K fine purity toggle (22/24
-    ratio, &asymp;91.7%) &mdash; Nepal's silver market is not commonly quoted by karat, so no purity toggle is
-    offered for it. A secondary free, keyless price API was evaluated as a fallback data source (goldprice.org,
+    per metal (shown, and editable, above) is then applied, since raw spot&times;FX alone undershoots the actual
+    FENEGOSIDA rate &mdash; it omits import duty, VAT, and dealer margin. There's no public live feed for that
+    real Nepal rate, so the premium itself is never auto-corrected: it only changes when you update it against an
+    actual quote. What <em>does</em> happen automatically, once a day at 12:00 local time (and once on first load
+    if that's been missed), is a re-anchor of the "Calibrated&hellip;" date/spot/amount shown above to that
+    moment's live price under the current premium &mdash; so that note and the staleness warning reflect same-day
+    drift, not how long ago someone last typed a number in. Both premiums, and the purity/alert settings, are
+    saved to this browser's local storage. Gold additionally supports a 22K hallmark vs. 24K fine purity toggle
+    (22/24 ratio, &asymp;91.7%) &mdash; Nepal's silver market is not commonly quoted by karat, so no purity toggle
+    is offered for it. A secondary free, keyless price API was evaluated as a fallback data source (goldprice.org,
     metals.live) but neither responded reliably, so resilience here is retry/backoff plus the local cache above,
     not a second live source.
     Indicative only &mdash; not an executable trading price.
@@ -455,8 +458,8 @@
   // duty, VAT, and dealer margin. Each entry records the spot price and date used to derive
   // its premium, so staleness can be detected later (see calibrationWarning()).
   const CALIBRATION = {
-    gold:   { premium: 1.2357, spotUsd: 3544.87, nprRate: 149.394326, date: '2026-11-20', referenceNpr: 245400 },
-    silver: { premium: 1.3207, spotUsd: 42.033,  nprRate: 149.394326, date: '2026-11-20', referenceNpr: 3110 },
+    gold:   { premium: 1.2326, spotUsd: 3606.75, nprRate: 148.404378, date: '2026-11-23', referenceNpr: 247400 },
+    silver: { premium: 1.3289, spotUsd: 42.053,  nprRate: 148.404378, date: '2026-11-23', referenceNpr: 3110 },
   };
   const LOCAL_PREMIUM = { gold: CALIBRATION.gold.premium, silver: CALIBRATION.silver.premium };
 
@@ -497,6 +500,20 @@
       state.alerts.enabled = !!storedAlerts.enabled;
       state.alerts.goldThreshold = Number.isFinite(storedAlerts.goldThreshold) ? storedAlerts.goldThreshold : null;
       state.alerts.silverThreshold = Number.isFinite(storedAlerts.silverThreshold) ? storedAlerts.silverThreshold : null;
+    }
+    // A prior daily noon re-anchor (see reanchorCalibration() below) overrides the
+    // hardcoded CALIBRATION date/spot/reference-amount, but never the premium itself.
+    const storedAnchor = loadJSON('xauxag.calibrationAnchor', null);
+    if (storedAnchor) {
+      ['gold', 'silver'].forEach((metal) => {
+        const a = storedAnchor[metal];
+        if (a && typeof a.date === 'string' && Number.isFinite(a.spotUsd) && Number.isFinite(a.nprRate) && Number.isFinite(a.referenceNpr)) {
+          CALIBRATION[metal].date = a.date;
+          CALIBRATION[metal].spotUsd = a.spotUsd;
+          CALIBRATION[metal].nprRate = a.nprRate;
+          CALIBRATION[metal].referenceNpr = a.referenceNpr;
+        }
+      });
     }
   })();
 
@@ -801,6 +818,66 @@
     }
   }
 
+  // ---- Daily noon re-anchor ----
+  // There's no public live feed for the real Nepal/FENEGOSIDA rate, so this cannot
+  // auto-correct the premium itself — only you can do that (see the "Adjust premiums"
+  // control), ideally checked against a real quote. What this *does* do: once a day at
+  // 12:00 local time, it resets CALIBRATION's date/spot/reference-amount to that moment's
+  // live spot (keeping whatever premium is currently set), so the "Calibrated …" note and
+  // the staleness warning never drift more than a few hours stale just from the clock
+  // ticking forward — the warning then only fires on a same-day spot swing >15%.
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function reanchorCalibration() {
+    const today = todayStr();
+    let anchored = false;
+    ['gold', 'silver'].forEach((metal) => {
+      const usd = state[metal].usd;
+      if (usd == null || !state.nprRate) return;
+      CALIBRATION[metal].date = today;
+      CALIBRATION[metal].spotUsd = usd;
+      CALIBRATION[metal].nprRate = state.nprRate;
+      CALIBRATION[metal].referenceNpr = Math.round(nprPerTola(metal, usd));
+      anchored = true;
+    });
+    if (!anchored) return;
+    saveJSON('xauxag.calibrationAnchor', {
+      gold: { date: CALIBRATION.gold.date, spotUsd: CALIBRATION.gold.spotUsd, nprRate: CALIBRATION.gold.nprRate, referenceNpr: CALIBRATION.gold.referenceNpr },
+      silver: { date: CALIBRATION.silver.date, spotUsd: CALIBRATION.silver.spotUsd, nprRate: CALIBRATION.silver.nprRate, referenceNpr: CALIBRATION.silver.referenceNpr },
+    });
+    saveJSON('xauxag.lastAnchorDate', today);
+    updateConversionNote();
+    updateStaleWarning();
+  }
+
+  // Catches up a missed noon tick — e.g. the page is opened for the first time today
+  // at 3pm — by re-anchoring immediately against the current live price instead of
+  // waiting for tomorrow's 12:00.
+  function maybeCatchUpReanchor() {
+    const today = todayStr();
+    const lastAnchorDate = loadJSON('xauxag.lastAnchorDate', null);
+    if (lastAnchorDate !== today && new Date().getHours() >= 12) {
+      reanchorCalibration();
+    }
+  }
+
+  function msUntilNextNoon() {
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1);
+    return next.getTime() - now.getTime();
+  }
+
+  function scheduleNoonReanchor() {
+    setTimeout(() => {
+      reanchorCalibration();
+      scheduleNoonReanchor();
+    }, msUntilNextNoon());
+  }
+
   function checkAlerts() {
     if (!state.alerts.enabled) return;
     const goldNow = currentValue('gold', 'NPR');
@@ -934,6 +1011,7 @@
 
       render();
       updateStatusText();
+      maybeCatchUpReanchor();
     } catch (err) {
       console.error('Fetch failed:', err);
       document.getElementById('warnNote').classList.add('show');
@@ -1041,6 +1119,7 @@
     URL.revokeObjectURL(url);
   });
 
+  scheduleNoonReanchor();
   fetchAll();
   setInterval(fetchAll, REFRESH_MS);
   setInterval(updateStatusText, 1000);

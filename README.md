@@ -54,14 +54,16 @@ To correct for this, the app applies a `LOCAL_PREMIUM` multiplier per metal:
 
 | Metal | Default premium | Basis |
 |---|---|---|
-| Gold | ×1.2357 (+23.6%) | Calibrated 2026-11-20 against live spot ($3,544.87/oz) and a Nepal market rate of Rs 245,400/tola |
-| Silver | ×1.3207 (+32.1%) | Calibrated 2026-11-20 against live spot ($42.033/oz) and a Nepal market rate of Rs 3,110/tola |
+| Gold | ×1.2326 (+23.3%) | Calibrated 2026-11-23 against live spot ($3,606.75/oz) and a Nepal market rate of Rs 247,400/tola |
+| Silver | ×1.3289 (+32.9%) | Calibrated 2026-11-23 against live spot ($42.053/oz) and a Nepal market rate of Rs 3,110/tola |
 
-An earlier gold value of ×2.063 was calibrated against a stale spot price (effectively assuming gold around $2,123/oz) and badly overstated the live NPR/tola price once gold rallied well past that — it was reverted to ×1.2357. Silver's premium was originally a rough guess (×1.35); it's now calibrated the same way gold's is, against an actual quoted Nepal silver rate.
+Earlier values (gold ×2.063, then ×1.2357; silver ×1.35, then ×1.3207) were each calibrated against spot prices that later drifted, each time causing the computed NPR/tola price to undershoot the real Nepal rate by a growing amount (most recently by about Rs 1,000/tola on gold) until re-checked. The [daily noon re-anchor](#local-market-premium) keeps the displayed "Calibrated…" date fresh, but — as noted there — it can't substitute for periodically re-verifying the premium itself against a real quote.
 
 These defaults, along with the spot price and date each was calibrated against, live in the `CALIBRATION` constant in the script (which seeds `LOCAL_PREMIUM`). They seed the "Adjust premiums" input fields on the page. You can type in new gold/silver multipliers there and click **Update** to immediately recalculate every tile, chart, and table row — the conversion note updates to show the active multipliers and their percentage, and the new values are saved to `localStorage` (`xauxag.premiums`), so they survive a page reload. To change the *defaults* (what a fresh browser with no saved value sees), edit `CALIBRATION`/`LOCAL_PREMIUM` in the script.
 
 **Calibration staleness warning**: because each premium is a single fixed multiplier, it drifts out of date as spot prices move relative to the Nepal market (duty, VAT, and dealer margin don't scale perfectly with the international price). The page compares the live spot price against the spot price (and date) each premium was calibrated against, and shows a warning beneath the conversion note if more than 14 days have passed or the spot price has drifted more than 15% — a prompt to re-check a current Nepal market quote and update the premium (and ideally the `CALIBRATION` constant) again.
+
+**Daily noon re-anchor**: there's no public live feed for the real Nepal/FENEGOSIDA rate, so the premium itself can't be auto-corrected — that always requires you to compare against an actual quote and use the "Adjust premiums" control above. What *is* automatic: once a day at 12:00 local time (and once immediately on load if that tick was missed — e.g. the page is opened for the first time that day after noon), the page re-anchors `CALIBRATION`'s date, spot price, and reference NPR amount to that moment's live price, computed with whatever premium is currently set. This keeps the "Calibrated …" note and the staleness warning reflecting same-day drift rather than accumulating age just from the clock ticking forward since the premium was last manually checked. It does **not** mean the reference amount has been re-verified against a real Nepal quote that day — only that it's internally consistent with the current premium as of that re-anchor. The anchor is saved to `localStorage` (`xauxag.calibrationAnchor`, `xauxag.lastAnchorDate`).
 
 ### Gold purity (24K fine vs. 22K hallmark)
 
